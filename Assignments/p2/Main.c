@@ -2,7 +2,7 @@ code Main
 
   -- OS Class: Project 2
   --
-  -- <PUT YOUR NAME HERE>
+  -- <401110172 - Nazanin Yousefi>
   --
   -- This package contains the following:
   --     SimpleThreadExample
@@ -22,11 +22,11 @@ code Main
 
       -----  Uncomment any one of the following to perform the desired test  -----
 
-      SimpleThreadExample ()
-      -- MoreThreadExamples ()
-      -- TestMutex ()
-      -- ProducerConsumer ()
-      -- DiningPhilosophers ()
+      --  SimpleThreadExample ()
+      --  MoreThreadExamples ()
+      --  TestMutex ()
+      --  ProducerConsumer ()
+      DiningPhilosophers ()
 
       ThreadFinish ()
 
@@ -255,6 +255,7 @@ code Main
 
         -- Leave
         myLock.Unlock()
+        --  print("here we unlocked")
 
         -- Perform non-critical work
         for k = 1 to waitTime
@@ -310,8 +311,14 @@ code Main
     bufferNextIn: int = 0
     bufferNextOut: int = 0
     thArray: array [8] of Thread = new array of Thread { 8 of new Thread }
+    myLock1: Mutex = new Mutex   
+    fullBufferSem: Semaphore = new Semaphore
+    emptyBufferSem: Semaphore = new Semaphore
 
   function ProducerConsumer ()
+      myLock1.Init()
+      fullBufferSem.Init(0)
+      emptyBufferSem.Init(BUFFER_SIZE)
 
       print ("     ")
 
@@ -347,8 +354,11 @@ code Main
         i: int
         c: char = intToChar ('A' + myId - 1)
       for i = 1 to 5
+        
         -- Perform synchroniztion...
-
+        emptyBufferSem.Down()
+        -- we should lock mutex
+        myLock1.Lock()
         -- Add c to the buffer
         buffer [bufferNextIn] = c
         bufferNextIn = (bufferNextIn + 1) % BUFFER_SIZE
@@ -356,9 +366,10 @@ code Main
 
         -- Print a line showing the state
         PrintBuffer (c)
-
+        myLock1.Unlock()
+        fullBufferSem.Up()
         -- Perform synchronization...
-
+     
       endFor
     endFunction
 
@@ -367,7 +378,8 @@ code Main
         c: char
       while true
         -- Perform synchroniztion...
-
+        fullBufferSem.Down()
+        myLock1.Lock()
         -- Remove next character from the buffer
         c = buffer [bufferNextOut]
         bufferNextOut = (bufferNextOut + 1) % BUFFER_SIZE
@@ -375,7 +387,8 @@ code Main
 
         -- Print a line showing the state
         PrintBuffer (c)
-
+        myLock1.Unlock()
+        emptyBufferSem.Up()
         -- Perform synchronization...
 
       endWhile
@@ -500,29 +513,71 @@ code Main
     superclass Object
     fields
       status: array [5] of int             -- For each philosopher: HUNGRY, EATING, or THINKING
+      mylock2: Mutex
+      conditionArray: array [5] of Condition
     methods
       Init ()
       PickupForks (p: int)
       PutDownForks (p: int)
+      --  CheckPhilosopher (i: int)
       PrintAllStatus ()
   endClass
 
   behavior ForkMonitor
 
     method Init ()
+      var i:int
       -- Initialize so that all philosophers are THINKING.
       -- ...unimplemented...
+      
+      status = new array of int {THINKING,THINKING,THINKING,THINKING,THINKING}
+      mylock2 = new Mutex
+      mylock2.Init()
+
+      conditionArray = new array of Condition { 5 of new Condition}
+      while(i<5)
+        conditionArray[i].Init()
+        i = i+1
+      endWhile
       endMethod
 
     method PickupForks (p: int)
+      mylock2.Lock()
       -- This method is called when philosopher 'p' is wants to eat.
       -- ...unimplemented...
+      status[p] = HUNGRY
+      mon.PrintAllStatus()
+      --  CheckPhilosopher(p)
+      while status[(p-1)%5] == EATING || status[(p+1)%5] == EATING
+        conditionArray[p].Wait(&mylock2)
+      endWhile
+
+      if(status[p]== HUNGRY && status[(p-1)%5] != EATING && status[(p+1)%5] != EATING)
+        status[p] = EATING
+        mon.PrintAllStatus()
+      endIf
+      
+       mylock2.Unlock()
       endMethod
 
     method PutDownForks (p: int)
+     mylock2.Lock()
       -- This method is called when the philosopher 'p' is done eating.
       -- ...unimplemented...
+      status[p] = THINKING
+      mon.PrintAllStatus()
+      conditionArray[(p-1)%5].Signal(&mylock2)
+      conditionArray[(p+1)%5].Signal(&mylock2)
+     mylock2.Unlock()
       endMethod
+
+    --  method CheckPhilosopher(i: int)
+    --  if(status[i]== HUNGRY && status[(i-1)%5 != EATING && status[(i+1)%5] != EATING])
+    --      status[i] = EATING
+    --  else
+    --    conditionArray[i].Wait()
+    --  endIf
+    --  endMethod
 
     method PrintAllStatus ()
       -- Print a single line showing the status of all philosophers.

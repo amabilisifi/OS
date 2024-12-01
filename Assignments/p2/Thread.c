@@ -108,7 +108,7 @@ code Thread
       var
         junk: int
         mainFun: ptr to function (int)
-      -- print ("ThreadStartMain...\n")
+      --  print ("ThreadStartMain...\n")
       junk = SetInterruptsTo (ENABLED)
       mainFun = currentThread.initialFunction
       mainFun (currentThread.initialArgument)

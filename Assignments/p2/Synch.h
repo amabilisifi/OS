@@ -15,6 +15,9 @@ header Synch
 
   class Mutex
     superclass Object
+    fields
+      locked:bool
+      lockedThread:ptr to Thread
     methods
       Init ()
       Lock ()

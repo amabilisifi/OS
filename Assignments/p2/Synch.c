@@ -2,7 +2,7 @@ code Synch
 
   -- OS Class: Project 2
   --
-  -- <PUT YOUR NAME HERE>
+  -- <401110172>
 
 -----------------------------  Semaphore  ---------------------------------
 
@@ -79,6 +79,7 @@ code Synch
 -----------------------------  Mutex  ---------------------------------
 
   behavior Mutex
+
     -- This class provides the following methods:
     --    Lock()
     --         Acquire the mutex if free, otherwise wait until the mutex is
@@ -95,26 +96,69 @@ code Synch
       ----------  Mutex . Init  ----------
 
       method Init ()
-          FatalError ("Unimplemented method")
+          locked = false
+          lockedThread = null
         endMethod
 
       ----------  Mutex . Lock  ----------
 
       method Lock ()
-          FatalError ("Unimplemented method")
+        var state:int
+          
+         
+          state = SetInterruptsTo(DISABLED)
+          --  print(currentThread.name)
+          --  print(" is attempting to acquire the lock...\n")
+          print("")
+          
+          while(locked)
+            --  lockedThread.yield() -- for avoiding busy waiting
+            readyList.AddToEnd(currentThread)
+            currentThread.Sleep()
+
+          endWhile
+          -- after that locking our mutex
+          print("")
+          
+          locked = true
+          lockedThread = currentThread
+          state = SetInterruptsTo(state)
+
+          --  print("Current Thread that owns the lock is: ")
+          --  print(currentThread.name)
+          --  print("\n")
+          
         endMethod
 
       ----------  Mutex . Unlock  ----------
 
       method Unlock ()
-          FatalError ("Unimplemented method")
-        endMethod
+          var state: int
+            nextThread: ptr to Thread
+          
+          --  print("Unlocking the lock held by: ")
+          --  print(currentThread.name)
+          --  print("\n")
+           state = SetInterruptsTo(DISABLED)
+
+          if !readyList.IsEmpty()
+            nextThread = readyList.Remove()
+            nextThread.status = READY
+            readyList.AddToEnd(nextThread)
+          endIf
+
+         
+          -- Release the lock
+          locked = false
+          lockedThread = null
+          --  print("Lock has been released\n")
+          state = SetInterruptsTo(state)
+      endMethod
 
       ----------  Mutex . IsHeldByCurrentThread  ----------
 
       method IsHeldByCurrentThread () returns bool
-          FatalError ("Unimplemented method")
-          return false
+           return (lockedThread == currentThread)
         endMethod
 
   endBehavior

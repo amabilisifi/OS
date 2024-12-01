@@ -46,3 +46,5 @@ Main.o: Main.s
 
 os: System.o List.o Thread.o Switch.o Synch.o Main.o Runtime.o
 	lddd System.o List.o Thread.o Switch.o Synch.o Main.o Runtime.o -o os
+
+	
