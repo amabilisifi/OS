@@ -24,12 +24,12 @@ code Main
       processManager.Init ()
 
       -- Initialize the ThreadManager
-      threadManager = new ThreadManager
-      threadManager.Init ()
+      --  threadManager = new ThreadManager
+      --  threadManager.Init ()
 
       -- Initialize the FrameManager
-      frameManager = new FrameManager
-      frameManager.Init ()
+      --  frameManager = new FrameManager
+      --  frameManager.Init ()
 
 -- THE FOLLOWING CODE MAY BE USEFUL DURING TESTING, SO YOU MAY WISH TO
 -- UNCOMMENT AND USE ALL OR PART OF IT.  HOWEVER, FOR YOUR FINAL RUN,

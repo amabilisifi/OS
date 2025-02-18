@@ -159,6 +159,21 @@ header Kernel
       Broadcast (mutex: ptr to Mutex)
   endClass
 
+--------------- HoareCondition  ---------------
+
+  class HoareCondition
+    superclass Object
+    fields
+      waitingQueue: List [Thread]
+      hoareMutex: Mutex 
+      ownerThread: Thread
+      isSignaled: bool
+    methods
+      Init ()
+      Wait (mutex: ptr to Mutex)
+      Signal (mutex: ptr to Mutex)
+  endClass
+
   ---------------  Thread  ---------------
 
   class Thread
@@ -192,7 +207,9 @@ header Kernel
     superclass Object
     fields
       threadTable: array [MAX_NUMBER_OF_PROCESSES] of Thread
-      freeList: List [Thread]
+      freeThreadsList: List [Thread]
+      aThreadBecameFree: Condition
+      threadManagerLock:Mutex
     methods
       Init ()
       Print ()

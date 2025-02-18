@@ -1,6 +1,7 @@
 code Kernel
 
-  -- <PUT YOUR NAME HERE>
+  -- <401110172>
+  -- Nazanin Yousefi
 
 -----------------------------  InitializeScheduler  ---------------------------------
 
@@ -438,6 +439,77 @@ code Kernel
 
   endBehavior
 
+-----------------------------  HoareCondition  ---------------------------------
+
+  behavior HoareCondition
+    
+      ----------  HoareCondition . Init  ----------
+
+      method Init ()
+          waitingQueue = new List[Thread]
+          hoareMutex = new Mutex
+          hoareMutex.Init()
+      endMethod
+
+      -----------  HoareCondition . Wait  ----------
+
+    method Wait (mutex: ptr to Mutex)
+        var
+            oldIntStat: int
+        if !mutex.IsHeldByCurrentThread()
+            FatalError("Attempt to wait on condition when mutex is not held")
+        endIf
+
+        oldIntStat = SetInterruptsTo(DISABLED)
+
+        -- Release the mutex and add the current thread to the waiting queue
+        mutex.Unlock()
+        waitingQueue.AddToEnd(currentThread)
+
+        hoareMutex.Lock()
+        hoareMutex.Unlock()
+
+        currentThread.Sleep()
+
+        mutex.Lock()
+
+        oldIntStat = SetInterruptsTo(oldIntStat)
+    endMethod
+
+      ----------  HoareCondition . Signal  ----------
+----------  HoareCondition . Signal  ----------
+
+    method Signal (mutex: ptr to Mutex)
+        var
+            oldIntStat: int
+            t: ptr to Thread
+
+        if !mutex.IsHeldByCurrentThread()
+            FatalError("Attempt to signal a condition when mutex is not held")
+        endIf
+
+        oldIntStat = SetInterruptsTo(DISABLED)
+
+        t = waitingQueue.Remove()
+        if t
+            hoareMutex.Lock()
+            t.status = READY
+            readyList.AddToEnd(t)
+
+            mutex.Unlock()
+            readyList.AddToEnd(currentThread)
+            currentThread.Sleep()
+
+            mutex.Lock()
+            hoareMutex.Unlock()
+        endIf
+
+        oldIntStat = SetInterruptsTo(oldIntStat)
+    endMethod
+
+
+  endBehavior
+
 -----------------------------  Thread  ---------------------------------
 
   behavior Thread
@@ -679,20 +751,36 @@ code Kernel
       oldStatus = SetInterruptsTo (oldStatus)
     endFunction
 
------------------------------  ThreadManager  ---------------------------------
+-----------------------------  ThreadManager  ---------------------------------******************************************
 
   behavior ThreadManager
 
       ----------  ThreadManager . Init  ----------
 
       method Init ()
-        --
-        -- This method is called once at kernel startup time to initialize
-        -- the one and only "ThreadManager" object.
-        -- 
-          print ("Initializing Thread Manager...\n")
-          -- NOT IMPLEMENTED
-        endMethod
+
+
+        -- we want to initialize the one and only "ThreadManager" object, and this method is called once at kernel startup time to initialize
+        -- we need a list of all threads, list of free theads, a mutex lock for critical sections, and a condition to call when we free a thread
+        var i:int -- we will use this later in a for
+        print ("Initializing Thread Manager...\n")
+        threadTable = new array of Thread {MAX_NUMBER_OF_PROCESSES of new Thread}
+        freeThreadsList=new List [Thread]
+        aThreadBecameFree= new Condition
+        threadManagerLock= new Mutex
+
+        aThreadBecameFree.Init()
+        threadManagerLock.Init()
+
+        -- then we should initailize threads in thread table list and marked it as unused at the initalization
+
+        for i= 0 to MAX_NUMBER_OF_PROCESSES-1
+          threadTable[i].Init("Thread "+i)
+          threadTable[i].status=UNUSED
+          freeThreadsList.AddToEnd(&threadTable[i])
+
+        endFor
+      endMethod
 
       ----------  ThreadManager . Print  ----------
 
@@ -712,7 +800,7 @@ code Kernel
             ThreadPrintShort (&threadTable[i])
           endFor
           print ("Here is the FREE list of Threads:\n   ")
-          freeList.ApplyToEach (PrintObjectAddr)
+          freeThreadsList.ApplyToEach (PrintObjectAddr)
           nl ()
           oldStatus = SetInterruptsTo (oldStatus)
         endMethod
@@ -720,23 +808,39 @@ code Kernel
       ----------  ThreadManager . GetANewThread  ----------
 
       method GetANewThread () returns ptr to Thread
-        -- 
-        -- This method returns a new Thread; it will wait
-        -- until one is available.
-        -- 
-          -- NOT IMPLEMENTED
-          return null
+        -- we want to wait untill there is a free thread -> waiting on aThreadBeFree condition 
+        var th: ptr to Thread -- thread that has become free recently
+          threadManagerLock.Lock() -- we are entering a critical section of shared data list 
+
+          while(freeThreadsList.IsEmpty())
+            -- there is no thread we van use -> waiting
+            aThreadBecameFree.Wait(&threadManagerLock)	
+          endWhile
+
+          th = freeThreadsList.Remove()
+
+          if !th									-- if freelist is empty print fatal error	
+		        FatalError("Cannot not remove any thread as the waiting list is empty:  ")
+	        endIf
+
+          th.status = JUST_CREATED
+          
+          threadManagerLock.Unlock()
+          return th
         endMethod
 
       ----------  ThreadManager . FreeThread  ----------
 
       method FreeThread (th: ptr to Thread)
-        -- 
-        -- This method is passed a ptr to a Thread;  It moves it
-        -- to the FREE list.
-        -- 
-          -- NOT IMPLEMENTED
-        endMethod
+        -- we want to free a thread and change it's status and even adding it to frellist and so on and it is also a critical section
+        threadManagerLock.Lock()
+        th.status = UNUSED
+        freeThreadsList.AddToEnd(th)
+        -- we shoul signal condition that athread become free
+        aThreadBecameFree.Signal(&threadManagerLock) -- and we are all done by freeing a thread
+        
+        threadManagerLock.Unlock()
+      endMethod
 
     endBehavior
 
@@ -824,6 +928,24 @@ code Kernel
         -- the one and only "processManager" object.  
         --
         -- NOT IMPLEMENTED
+        -- we need to initailize each fields we have in the h file
+        var k:int
+        processManagerLock = new Mutex
+        processManagerLock.Init()
+        aProcessBecameFree = new Condition
+        aProcessBecameFree.Init()
+        aProcessDied = new Condition
+        aProcessDied.Init()
+
+        freeList=new List[ProcessControlBlock]					
+	      processTable=new array of ProcessControlBlock{MAX_NUMBER_OF_PROCESSES of new ProcessControlBlock }  
+
+        for k=0 to MAX_NUMBER_OF_PROCESSES-1
+		      processTable[k].Init()
+		      processTable[k].status=FREE								
+		      freeList.AddToEnd(&processTable[k])							
+        endFor
+
         endMethod
 
       ----------  ProcessManager . Print  ----------
@@ -879,7 +1001,32 @@ code Kernel
         -- until one is available.
         --
           -- NOT IMPLEMENTED
-          return null
+          -- it's like above we want to free some process 
+          -- critival section duo to shared data of lists felan
+          var pr:ptr to  ProcessControlBlock
+          processManagerLock.Lock()
+          -- now we should check free list and wait if ...
+
+          if (freeList.IsEmpty())					
+            -- we should wait until pr which is kinda a new process is not null
+            while( ! pr )						
+                pr = freeList.Remove()				
+                if (! pr )					
+                  aProcessBecameFree.Wait(&processManagerLock)
+               endIf
+            endWhile
+            else
+             pr = freeList.Remove()				
+          endIf
+       
+          -- we should assign umique process id to our pr, we can use the fact that we are in a critical section so we can use last assigned process id and add 1 to it and it willl be always unique
+          nextPid = nextPid +1
+          pr.pid= nextPid
+
+          pr.status=ACTIVE
+
+          processManagerLock.Unlock()
+          return pr
         endMethod
 
       ----------  ProcessManager . FreeProcess  ----------
@@ -890,6 +1037,14 @@ code Kernel
         -- to the FREE list.
         --
           -- NOT IMPLEMENTED
+          processManagerLock.Lock()
+
+          p.status = FREE
+          p.pid= -1
+          freeList.AddToEnd(p)
+          aProcessBecameFree.Signal(&processManagerLock)
+
+          processManagerLock.Unlock()
         endMethod
 
 
@@ -998,13 +1153,47 @@ code Kernel
 
       method GetNewFrames (aPageTable: ptr to AddrSpace, numFramesNeeded: int)
           -- NOT IMPLEMENTED
-        endMethod
+          var address,j,f: int
+          -- acquire the lock
+          frameManagerLock.Lock()
+          -- Wait on newFramesAvailable if numberFreeFrames is 0
+		      while(numberFreeFrames< numFramesNeeded )				
+			      newFramesAvailable.Wait( &frameManagerLock)				
+		      endWhile
+
+		      for j=0 to numFramesNeeded-1
+            f=framesInUse.FindZeroAndSet()						
+            address= PHYSICAL_ADDRESS_OF_FIRST_PAGE_FRAME + (f * PAGE_SIZE)
+            aPageTable.SetFrameAddr(j,address)
+		      endFor
+          
+          numberFreeFrames=numberFreeFrames-numFramesNeeded
+          aPageTable.numberOfPages=aPageTable.numberOfPages+numFramesNeeded
+          frameManagerLock.Unlock()
+      endMethod
 
       ----------  FrameManager . ReturnAllFrames  ----------
 
       method ReturnAllFrames (aPageTable: ptr to AddrSpace)
           -- NOT IMPLEMENTED
-        endMethod
+          var g:int
+          frameAddr:int 
+          bitNumber:int
+          numFramesToReturn: int
+
+          frameManagerLock.Lock()
+
+          numFramesToReturn=aPageTable.numberOfPages
+          for g=0 to numFramesToReturn-1
+            frameAddr = aPageTable.ExtractFrameAddr (g)
+            bitNumber = (frameAddr - PHYSICAL_ADDRESS_OF_FIRST_PAGE_FRAME ) / PAGE_SIZE
+            framesInUse.ClearBit(bitNumber )
+            numberFreeFrames=numberFreeFrames+1
+          endFor
+          newFramesAvailable.Broadcast(&frameManagerLock)
+          aPageTable.numberOfPages= 0
+          frameManagerLock.Unlock()
+      endMethod
 
     endBehavior
 
@@ -1364,6 +1553,7 @@ code Kernel
 
     endBehavior
 
+----------------------------------------------------------------------------------------------------------------------
 -----------------------------  TimerInterruptHandler  ---------------------------------
 
   function TimerInterruptHandler ()
